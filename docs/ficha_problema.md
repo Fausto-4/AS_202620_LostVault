@@ -20,12 +20,11 @@ Estudiantes de la universidad, tanto quienes pierden objetos como quienes los en
 
 ## Propuesta
 
-Una plataforma tipo "Marketplace" (similar a Facebook Marketplace) acoplada a la app oficial de la universidad, donde:
+Una plataforma tipo "Marketplace" (similar a Facebook Marketplace), desarrollada como aplicación independiente con identidad visual de la universidad, donde:
 
 - Tanto la oficina de objetos perdidos como cualquier estudiante puedan publicar un objeto encontrado, con foto y descripción.
 - Los estudiantes puedan buscar y filtrar objetos publicados sin necesidad de escribirle a nadie ni desplazarse físicamente.
-- La entrega del objeto se verifica solicitando al reclamante una selfie con su cédula y carné estudiantil, como mecanismo básico de identificación antes de la entrega presencial.
-
+- La entrega del objeto se verifique solicitando al reclamante una foto sosteniendo su cédula y carné estudiantil, como mecanismo básico de identificación antes de la entrega presencial.
 ## Valor esperado
 
 - Reduce el tiempo perdido en desplazamientos innecesarios cuando la oficina está cerrada o sin atención.
