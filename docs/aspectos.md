@@ -1,17 +1,12 @@
-# Aspecto de Calidad Declarado — LostVault
+# Aspectos de Calidad Declarados — LostVault
 
-## Aspecto seleccionado: Disponibilidad
+| Aspecto de calidad | Justificación breve | Escenario relacionado |
+|---|---|---|
+| Disponibilidad | El sistema debe estar accesible en todo momento, sin depender del horario de la oficina física ni de la presencia de un encargado, ya que este es el problema central que resuelve el proyecto. | [Escenario 1](arc42/10_requisitos_calidad.md#escenario-1--disponibilidad) |
+| Usabilidad | La plataforma debe ser tan simple como el Marketplace de Facebook, ya que los usuarios son estudiantes que esperan una experiencia sin fricción ni capacitación previa. | [Escenario 2](arc42/10_requisitos_calidad.md#escenario-2--usabilidad) |
+| Seguridad | El mecanismo de verificación de identidad (cédula + carné) debe garantizar que el objeto se entregue únicamente a su dueño legítimo. | [Escenario 3](arc42/10_requisitos_calidad.md#escenario-3--seguridad) |
+| Rendimiento | El sistema debe responder con rapidez incluso en horas pico de consulta, para no replicar la lentitud del proceso manual actual. | [Escenario 4](arc42/10_requisitos_calidad.md#escenario-4--rendimiento) |
 
-## Justificación
+## Detalle — Disponibilidad (aspecto original declarado)
 
-El problema que resuelve LostVault surge precisamente de una limitación de disponibilidad: hoy, un estudiante solo puede saber si su objeto perdido fue encontrado si la oficina de objetos perdidos está abierta y hay alguien presente para atenderlo, o si logra contactar directamente al encargado y este responde a tiempo y sabe el objeto fue visto o no.
-
-Si la plataforma no está disponible de forma constante (por ejemplo, solo accesible en ciertos horarios, o con caídas frecuentes), se replicaría el mismo problema que se busca resolver: el estudiante volvería a depender de la disponibilidad de un tercero para saber el estado de su objeto.
-
-Por esta razón, la disponibilidad se declara como el aspecto de calidad prioritario del sistema: la plataforma debe permitir consultar el estado de los objetos perdidos en cualquier momento, sin depender del horario de atención de la oficina física ni de la disponibilidad de una persona encargada.
-
-## Cómo se busca garantizar
-
-- El sistema debe estar accesible las 24 horas, los 7 días de la semana, desde la app de la universidad.
-- Las publicaciones de objetos (tanto de la oficina como de estudiantes) deben quedar visibles de inmediato para cualquier consulta, sin depender de que alguien las revise o apruebe manualmente antes de mostrarse.
-- Se evaluará mantener el sistema con la menor cantidad posible de puntos únicos de falla que puedan dejarlo fuera de servicio.
+El problema que resuelve LostVault surge precisamente de una limitación de disponibilidad: hoy, un estudiante solo puede saber si su objeto perdido fue encontrado si la oficina de objetos perdidos está abierta y hay alguien presente para atenderlo, o si logra contactar directamente al encargado y este responde a tiempo. Por esta razón, la disponibilidad se declaró como el aspecto de calidad prioritario del sistema desde la entrega anterior.
