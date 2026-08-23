@@ -39,4 +39,4 @@ Mantiene la aplicación como una única unidad desplegable, pero organizada inte
 El monolito modular ofrece el mejor equilibrio entre simplicidad de despliegue y separación de responsabilidades, se ajusta a las restricciones reales del proyecto (equipo de 4 personas, infraestructura gratuita, plazo académico fijo).
 La arquitectura hexagonal se aplicará de forma selectiva en los módulos con reglas de negocio críticas (como la verificación de identidad), sin adoptarla de forma completa en todo el sistema.
 
-*Nota: la decisión final, con sus alternativas y consecuencias detalladas, se documenta en `docs/adr/0001-*.md`.*
+*Nota: la decisión final, con sus alternativas y consecuencias detalladas, se documenta en `docs/adr/0001-estilo-arquitectonico.md`.*
