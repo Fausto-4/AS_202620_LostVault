@@ -1,4 +1,4 @@
-# Tabla Módulo → Datos (Propiedad única)
+# Tabla Módulo → Datos (Con único dueño)
 
 | Módulo (dueño) | Dato que posee | Quién puede leerlo |
 |---|---|---|
