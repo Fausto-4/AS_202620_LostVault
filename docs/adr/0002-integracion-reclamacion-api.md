@@ -80,3 +80,6 @@ ADR adicional.
 - Modelo de respuesta: `lib/features/claims/domain/claim.dart`.
 - Evidencia automatizada: `test/api_contract_test.dart` y
   `.github/workflows/flutter.yml`.
+- Fallos parciales de esta integración y su mitigación (idempotencia con
+  `Idempotency-Key`, añadida de forma compatible al contrato `1.0.0`):
+  [`../fallos-parciales/s11-fallos-parciales.md`](../fallos-parciales/s11-fallos-parciales.md).
