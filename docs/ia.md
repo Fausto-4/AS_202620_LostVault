@@ -221,3 +221,53 @@ Limitaciones: `PyJWT==2.7.0` es una versión real pero de 2023, bastante más vi
 `fastapi` y `uvicorn`; no se verificó si tiene vulnerabilidades conocidas pendientes de
 parche. La auditoría de erosión cubrió solo el flujo de reclamación (`create_claim`); no
 se revisó el resto de `main.py` en busca de otros cruces de frontera.
+
+## Registro S11 — 2026-10-18
+
+Se utilizó IA para analizar los fallos parciales de la integración principal
+(`POST /v1/objects/{objectId}/claims`), diseñar e implementar su mitigación del lado del
+proveedor, y redactar el ADR de extracción de un módulo.
+
+Trabajo realizado y motivo:
+
+- Se construyó la tabla de modos de fallo F1–F7 en
+  `docs/fallos-parciales/s11-fallos-parciales.md` (no responde, responde tarde, responde
+  dos veces, reintentos en avalancha, fallo sostenido, dos instancias serverless y clave
+  reusada), cada uno con su mitigación y su estado real en el repositorio. Se partió del
+  contexto propio del proyecto (Vercel con arranques en frío, estado en memoria, cliente
+  Flutter aún sin adaptador HTTP) en vez de una tabla genérica.
+- Se hizo idempotente `create_claim` en `backend/main.py` con dos capas: cabecera
+  `Idempotency-Key` (el reintento repite el `201` original) y deduplicación por usuario
+  (`200` en vez de `409` cuando el mismo estudiante repite la petición). Se hizo porque el
+  caso F2 era un error real: un reintento tras una respuesta tardía le decía al dueño que
+  otra persona se había llevado su objeto. El registro S7 ya había señalado que el caso de
+  uso no manejaba duplicados.
+- Se agregaron 8 pruebas en `backend/test_api.py` (reintento, duplicado sin clave, otro
+  usuario con la misma clave, clave reusada para otro objeto, clave inválida, error no
+  cacheado, vencimiento y concurrencia), y se amplió `docs/contracts/lostvault-api.yaml`
+  de forma compatible para que `test/api_contract_test.dart` siguiera pasando.
+- Se diseñó la saga orquestada que haría falta si se extrajera `identity_verification`,
+  y se analizó dónde aplicaría el patrón outbox.
+- Se redactó el ADR 0005 evaluando tres opciones (no extraer, servicio síncrono, saga)
+  con criterios explícitos, y se creó `docs/arc42/11_riesgos.md` con los riesgos R1–R7.
+
+Aceptado: la idempotencia de la reclamación con sus pruebas, la ampliación compatible del
+contrato, la tabla de modos de fallo, el ADR 0005 (opción A, no extraer) con sus
+disparadores de revisión, y el registro de riesgos.
+
+Rechazado:
+
+- Implementar ahora las tácticas del cliente (timeout de 5 s, reintento con backoff y
+  circuit breaker), porque el cliente Flutter todavía usa adaptadores in-memory; quedan
+  especificadas como pendientes (R3, R4) y no como código que no se puede ejecutar.
+- Guardar en la tabla de idempotencia las respuestas de error (`404/409/422`): son
+  deterministas y guardarlas habría impedido que un reintento posterior tuviera éxito.
+- Una saga coreografiada: con dos participantes no aporta desacople y dispersa la lógica
+  del flujo.
+- Implementar el outbox: ninguna operación actual publica eventos.
+
+Limitaciones: la idempotencia y el candado solo protegen dentro de una instancia; con
+varias instancias de Vercel a la vez el problema F6 sigue abierto hasta conectar
+PostgreSQL (riesgo R1, aceptado). La lógica nueva se agregó en `backend/main.py`, así que
+la no conformidad NC6 de S9 (el archivo no separa módulos) sigue pendiente y ahora cubre
+también la idempotencia.
