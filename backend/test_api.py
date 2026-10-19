@@ -26,6 +26,7 @@ def fresh_state():
         "status": "available",
     }
     main._claims.clear()
+    main._idempotency.clear()
 
 
 @pytest.fixture
@@ -118,6 +119,100 @@ def test_claim_422_identity_not_verified(client):
     assert r.json()["code"] == "IDENTITY_NOT_VERIFIED"
     # una reclamación rechazada no debe cambiar el estado del objeto
     assert main._objects["obj-001"]["status"] == "available"
+
+
+#idempotencia: fallos parciales de la integración (Evidencia S11)
+def test_retry_with_same_key_replays_original_201_without_duplicating(client):
+    # Responde tarde: el cliente agota su timeout y reintenta con la misma clave
+    headers = {**auth(), "Idempotency-Key": "k-123"}
+    first = client.post("/v1/objects/obj-001/claims", headers=headers)
+    retry = client.post("/v1/objects/obj-001/claims", headers=headers)
+    assert first.status_code == retry.status_code == 201
+    assert retry.json() == first.json()
+    assert retry.headers["Idempotent-Replayed"] == "true"
+    schema("Claim").validate(retry.json())
+    assert len(main._claims) == 1
+
+
+def test_same_user_repeating_without_key_gets_200_not_409(client):
+    # Responde dos veces / doble toque: antes devolvía 409 al propio dueño
+    assert client.post("/v1/objects/obj-001/claims", headers=auth()).status_code == 201
+    r = client.post("/v1/objects/obj-001/claims", headers=auth())
+    assert r.status_code == 200
+    assert r.json() == {"objectId": "obj-001", "userId": "student-42", "verified": True}
+    assert len(main._claims) == 1
+
+
+def test_idempotency_does_not_let_another_user_take_the_object(client):
+    assert client.post(
+        "/v1/objects/obj-001/claims", headers={**auth(), "Idempotency-Key": "k-1"}
+    ).status_code == 201
+    r = client.post(
+        "/v1/objects/obj-001/claims",
+        headers={**auth("otro-usuario"), "Idempotency-Key": "k-1"},
+    )
+    assert r.status_code == 409
+    assert r.json()["code"] == "OBJECT_ALREADY_CLAIMED"
+
+
+def test_key_reused_for_another_object_is_rejected(client):
+    main._objects["obj-002"] = {
+        "id": "obj-002", "title": "Llaves", "description": "Aula 3", "status": "available"
+    }
+    headers = {**auth(), "Idempotency-Key": "k-1"}
+    assert client.post("/v1/objects/obj-001/claims", headers=headers).status_code == 201
+    r = client.post("/v1/objects/obj-002/claims", headers=headers)
+    assert r.status_code == 422
+    schema("Problem").validate(r.json())
+    assert r.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert main._objects["obj-002"]["status"] == "available"
+
+
+def test_invalid_idempotency_key_is_400(client):
+    r = client.post(
+        "/v1/objects/obj-001/claims", headers={**auth(), "Idempotency-Key": "x" * 256}
+    )
+    assert r.status_code == 400
+    schema("Problem").validate(r.json())
+    assert r.json()["code"] == "INVALID_IDEMPOTENCY_KEY"
+
+
+def test_failed_claim_is_not_cached_so_retry_can_succeed(client):
+    # Un 404 no se guarda: si el objeto aparece después, el reintento sí lo crea
+    headers = {**auth(), "Idempotency-Key": "k-9"}
+    assert client.post("/v1/objects/obj-009/claims", headers=headers).status_code == 404
+    main._objects["obj-009"] = {
+        "id": "obj-009", "title": "Gafas", "description": "Cafetería", "status": "available"
+    }
+    assert client.post("/v1/objects/obj-009/claims", headers=headers).status_code == 201
+
+
+def test_expired_key_is_purged(client, monkeypatch):
+    headers = {**auth(), "Idempotency-Key": "k-old"}
+    assert client.post("/v1/objects/obj-001/claims", headers=headers).status_code == 201
+    later = main._now() + main.IDEMPOTENCY_TTL_SECONDS + 1
+    monkeypatch.setattr(main, "_now", lambda: later)
+    # Vencida la clave, cae en la deduplicación natural: sigue sin duplicar
+    r = client.post("/v1/objects/obj-001/claims", headers=headers)
+    assert r.status_code == 200
+    assert ("student-42", "k-old") not in main._idempotency
+    assert len(main._claims) == 1
+
+
+def test_concurrent_claims_produce_exactly_one_201():
+    from concurrent.futures import ThreadPoolExecutor
+
+    def claim_as(user):
+        # un TestClient por hilo: cada uno tiene su propio portal de eventos
+        return TestClient(main.app).post(
+            "/v1/objects/obj-001/claims", headers=auth(user)
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        codes = list(pool.map(claim_as, [f"student-{i}" for i in range(10)]))
+    assert codes.count(201) == 1
+    assert codes.count(409) == 9
+    assert len(main._claims) == 1
 
 
 #logs estructurados 

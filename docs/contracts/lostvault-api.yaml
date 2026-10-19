@@ -15,7 +15,10 @@ paths:
       summary: Solicita la reclamación de un objeto disponible.
       description: >-
         El proveedor identifica al usuario a partir del token y verifica su
-        identidad antes de crear la reclamación.
+        identidad antes de crear la reclamación. La operación es idempotente:
+        el cliente debe enviar la misma Idempotency-Key en cada reintento, y si
+        el objeto ya fue reclamado por el mismo usuario se devuelve la
+        reclamación existente con 200 en lugar de 409.
       security:
         - bearerAuth: []
       parameters:
@@ -25,6 +28,17 @@ paths:
           schema:
             type: string
             minLength: 1
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: >-
+            Identificador único (p. ej. UUID v4) generado por el cliente para
+            esta intención de reclamar. Se reenvía igual en cada reintento.
+            Vigencia: 24 h, por usuario.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
       responses:
         '201':
           description: Reclamación creada y verificada.
@@ -38,6 +52,21 @@ paths:
                     objectId: '1'
                     userId: student-42
                     verified: true
+          headers:
+            Idempotent-Replayed:
+              description: Vale "true" cuando la respuesta es la repetición de una petición anterior con la misma Idempotency-Key.
+              schema:
+                type: string
+        '200':
+          description: >-
+            El objeto ya estaba reclamado por este mismo usuario (petición
+            repetida sin Idempotency-Key). Se devuelve la reclamación existente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+        '400':
+          $ref: '#/components/responses/InvalidIdempotencyKey'
         '401':
           $ref: '#/components/responses/Unauthenticated'
         '404':
@@ -45,7 +74,7 @@ paths:
         '409':
           $ref: '#/components/responses/ObjectAlreadyClaimed'
         '422':
-          $ref: '#/components/responses/IdentityNotVerified'
+          $ref: '#/components/responses/UnprocessableClaim'
 components:
   securitySchemes:
     bearerAuth:
@@ -82,6 +111,8 @@ components:
             - OBJECT_NOT_FOUND
             - OBJECT_ALREADY_CLAIMED
             - IDENTITY_NOT_VERIFIED
+            - IDEMPOTENCY_KEY_REUSED
+            - INVALID_IDEMPOTENCY_KEY
         message:
           type: string
   responses:
@@ -103,8 +134,17 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Problem'
-    IdentityNotVerified:
-      description: La identidad del usuario no pudo verificarse.
+    UnprocessableClaim:
+      description: >-
+        La identidad del usuario no pudo verificarse (IDENTITY_NOT_VERIFIED), o
+        la Idempotency-Key ya se usó para reclamar otro objeto
+        (IDEMPOTENCY_KEY_REUSED).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidIdempotencyKey:
+      description: La cabecera Idempotency-Key viene vacía o supera 255 caracteres.
       content:
         application/json:
           schema:

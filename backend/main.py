@@ -5,6 +5,9 @@ Endpoints: /health, /metrics, /objects y el de reclamar un objeto
 
 Por ahora los datos viven en memoria y se pierden al reiniciar.
 Falta conectar PostgreSQL.
+
+La reclamación es idempotente (Idempotency-Key + deduplicación por usuario);
+ver docs/fallos-parciales/s11-fallos-parciales.md.
 """
 import json
 import logging
@@ -145,6 +148,24 @@ _objects: dict[str, dict] = {
 }
 _claims: list[dict] = []
 
+# Idempotencia de POST /claims (ver docs/fallos-parciales/s11-fallos-parciales.md).
+# Clave = (usuario, Idempotency-Key) -> respuesta original. Se guarda solo la
+# respuesta 201: los errores de negocio (404/409/422) son deterministas y se
+# recalculan; un 5xx nunca se guarda, para que el reintento sí vuelva a intentar.
+IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60
+IDEMPOTENCY_KEY_MAX_LENGTH = 255
+_idempotency: dict[tuple[str, str], dict] = {}
+
+
+def _now() -> float:
+    return time.time()  # punto de inyección para probar el vencimiento
+
+
+def _purge_expired_keys(now: float) -> None:
+    expired = [k for k, v in _idempotency.items() if now - v["at"] > IDEMPOTENCY_TTL_SECONDS]
+    for k in expired:
+        del _idempotency[k]
+
 
 def verify_identity(user_id: str) -> bool:
     # Igual que en la app Flutter: es válida si el id no viene vacío
@@ -214,12 +235,49 @@ async def search_objects(status: str | None = None, q: str | None = None):
 async def create_claim(object_id: str, request: Request):
     # Mismo orden que ClaimObjectUseCase: sesión, objeto, disponibilidad, identidad
     user_id = current_user_id(request)
+    key = request.headers.get("idempotency-key")
+    if key is not None and not (0 < len(key.strip()) <= IDEMPOTENCY_KEY_MAX_LENGTH):
+        raise ApiProblem(
+            400, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key vacía o demasiado larga."
+        )
     with _lock:
+        now = _now()
+        _purge_expired_keys(now)
+
+        # 1) Reintento con la misma clave: se devuelve la respuesta original.
+        if key is not None:
+            stored = _idempotency.get((user_id, key))
+            if stored is not None:
+                if stored["objectId"] != object_id:
+                    raise ApiProblem(
+                        422,
+                        "IDEMPOTENCY_KEY_REUSED",
+                        "La Idempotency-Key ya se usó para reclamar otro objeto.",
+                    )
+                logger.info("claim_replayed", extra={"event": "claim_replayed"})
+                return JSONResponse(
+                    status_code=201,
+                    content=stored["body"],
+                    headers={"Idempotent-Replayed": "true"},
+                )
+
         obj = _objects.get(object_id)
         if obj is None:
             raise ApiProblem(404, "OBJECT_NOT_FOUND", "El objeto solicitado no existe.")
+
+        # 2) Sin clave (o con otra): si el objeto ya es de este mismo usuario, la
+        #    operación ya ocurrió. Se devuelve la reclamación existente con 200 en
+        #    vez de un 409 que le diría que otra persona se lo llevó.
         if obj["status"] != "available":
+            existing = next(
+                (c for c in _claims if c["objectId"] == object_id and c["userId"] == user_id),
+                None,
+            )
+            if existing is not None:
+                logger.info("claim_deduplicated", extra={"event": "claim_deduplicated"})
+                return JSONResponse(status_code=200, content=existing)
             raise ApiProblem(409, "OBJECT_ALREADY_CLAIMED", "El objeto ya fue reclamado.")
+
         if not verify_identity(user_id):
             raise ApiProblem(
                 422, "IDENTITY_NOT_VERIFIED", "La identidad no pudo verificarse."
@@ -227,4 +285,6 @@ async def create_claim(object_id: str, request: Request):
         claim = {"objectId": object_id, "userId": user_id, "verified": True}
         _claims.append(claim)
         obj["status"] = "claimed"
+        if key is not None:
+            _idempotency[(user_id, key)] = {"objectId": object_id, "body": claim, "at": now}
     return claim
