@@ -12,31 +12,31 @@ pendiente de implementar.
 
 ```mermaid
 flowchart TB
-    student["👤 Estudiante<br/>Pierde o encuentra un objeto"]
-    staff["👤 Encargado de oficina<br/>Administra y entrega objetos"]
+    student["Estudiante<br/>Pierde o encuentra un objeto"]
+    staff["Encargado de oficina<br/>Administra y entrega objetos"]
 
-    subgraph lostvault["LostVault (sistema)"]
-        mobile["<b>Aplicación móvil</b><br/>[Flutter]<br/>UI para estudiantes:<br/>buscar, publicar y reclamar"]
-        web["<b>Aplicación web</b><br/>[Flutter web]<br/>UI para encargados:<br/>administrar objetos entregados"]
-        cdn[("<b>Caché HTTP</b><br/>[CDN de Vercel]<br/>Solo GET /objects<br/>s-maxage 30 s + SWR 60 s")]
-        api["<b>API LostVault</b><br/>[FastAPI, función serverless en Vercel]<br/>Lógica de negocio: objects, search,<br/>claims, identity_verification"]
-        db[("<b>Base de datos</b><br/>[PostgreSQL gestionado]<br/>objects, claims,<br/>idempotency_keys, users, outbox<br/><i>ADR 0006 — hoy: memoria del proceso</i>")]
-        publisher["<b>Publicador de outbox</b><br/>[Trabajo programado, cada 15 min]<br/>Entrega eventos al menos una vez<br/><i>diseñado</i>"]
+    subgraph lostvault["LostVault - sistema"]
+        mobile["Aplicacion movil - Flutter<br/>UI para estudiantes:<br/>buscar, publicar y reclamar"]
+        web["Aplicacion web - Flutter web<br/>UI para encargados:<br/>administrar objetos entregados"]
+        cdn[("Cache HTTP - CDN de Vercel<br/>Solo GET /objects<br/>s-maxage 30 s + SWR 60 s")]
+        api["API LostVault - FastAPI en Vercel<br/>objects, search, claims,<br/>identity_verification"]
+        db[("Base de datos - PostgreSQL<br/>objects, claims, idempotency_keys,<br/>users, outbox<br/>ADR 0006, hoy en memoria")]
+        publisher["Publicador de outbox<br/>Trabajo programado cada 15 min<br/>al menos una vez - disenado"]
     end
 
-    mail["Servicio de correo<br/>[Sistema externo]"]
+    mail["Servicio de correo<br/>Sistema externo"]
 
-    student -->|"Busca, publica y reclama (HTTPS)"| mobile
-    staff -->|"Administra objetos (HTTPS)"| web
-    mobile -->|"GET /objects (HTTPS/JSON)"| cdn
-    web -->|"GET /objects (HTTPS/JSON)"| cdn
-    cdn -->|"Fallo de caché o revalidación"| api
-    mobile -->|"POST /v1/objects/{id}/claims<br/>(HTTPS/JSON, no-store)"| api
-    web -->|"Gestión de objetos<br/>(HTTPS/JSON, no-store)"| api
-    api -.->|"Transacción local: reclamar +<br/>clave de idempotencia + evento (SQL)"| db
-    publisher -.->|"Lee eventos pendientes<br/>FOR UPDATE SKIP LOCKED (SQL)"| db
+    student -->|"Busca, publica y reclama - HTTPS"| mobile
+    staff -->|"Administra objetos - HTTPS"| web
+    mobile -->|"GET /objects"| cdn
+    web -->|"GET /objects"| cdn
+    cdn -->|"Fallo de cache o revalidacion"| api
+    mobile -->|"POST /v1/objects/id/claims, no-store"| api
+    web -->|"Gestion de objetos, no-store"| api
+    api -.->|"Transaccion local: reclamo + clave + evento - SQL"| db
+    publisher -.->|"Lee eventos pendientes - SQL"| db
     publisher -.->|"ClaimCreated / ClaimRejected"| mail
-    mail -.->|"Aviso de reclamación (email)"| staff
+    mail -.->|"Aviso de reclamacion"| staff
 
     classDef planned stroke-dasharray: 5 5
     class db,publisher,mail planned
